@@ -1,0 +1,15 @@
+{
+  "name": "mui-helpdesk-simple",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "@line/bot-sdk": "^7.5.2"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
