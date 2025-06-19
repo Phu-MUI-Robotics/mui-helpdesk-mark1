@@ -77,7 +77,7 @@ function handleEvent(event) {
 function showProblemTypes(replyToken, userId) {
     userSessions.set(userId, {
         step: 'select_type',
-        timestamp: new Date().toLocaleString('th-TH')
+        timestamp: getThaiDateTime()
     });
 
     const message = {
@@ -562,6 +562,18 @@ function getProblemTypeName(type) {
 
 function generateTicketId() {
   return 'TK' + Date.now().toString().slice(-8);
+}
+
+function getThaiDateTime() {
+    return new Date().toLocaleString('th-TH', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
 }
 
 const PORT = process.env.PORT || 3000;
