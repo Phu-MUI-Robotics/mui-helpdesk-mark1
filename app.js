@@ -520,6 +520,10 @@ async function submitReport(replyToken, userId) {
     };
 
     try {
+
+        // แจ้งเตือน Telegram
+        await notifyTelegram(reportData);
+
         //ลบ session หลังจากส่งข้อมูล
         userSessions.delete(userId);
 
@@ -582,3 +586,43 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+
+//----------------------------------------------------------------------------------------------------------
+async function notifyTelegram(reportData) {
+    const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '7501921791:AAHq28KxeNcGRAks4DGMoh6CmQw32chwOaQ';
+    const telegramChatId = process.env.TELEGRAM_CHAT_ID || '-4699760769'; // Chat ID ของกลุ่ม Telegram
+
+    const message = `
+📋 **แจ้งปัญหาใหม่**
+🎫 หมายเลขติดตาม: ${reportData.ticket_id}
+🔸 ประเภท: ${reportData.problem_type_name}
+🔸 รายละเอียด: ${reportData.problem_details}
+🔸 รูปภาพ: ${reportData.image_count > 0 ? 'มีรูปภาพ' : 'ไม่มีรูปภาพ'}
+🔸 ข้อมูลติดต่อ: ${reportData.contact_info}
+🔸 เวลา: ${reportData.timestamp}
+    `;
+
+    // ส่งข้อความไปยัง Telegram
+    await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+        chat_id: telegramChatId,
+        text: message,
+        parse_mode: 'Markdown'
+    });
+
+    // ส่งรูปภาพ (ถ้ามี)
+    for (const imageId of reportData.image_ids) {
+        const imageUrl = `https://api-data.line.me/v2/bot/message/${imageId}/content`;
+        const imageBuffer = await axios.get(imageUrl, {
+            headers: {
+                Authorization: `Bearer ${config.channelAccessToken}`
+            },
+            responseType: 'arraybuffer'
+        });
+
+        await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, {
+            chat_id: telegramChatId,
+            photo: `data:image/jpeg;base64,${Buffer.from(imageBuffer.data).toString('base64')}`
+        });
+    }
+}
