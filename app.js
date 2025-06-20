@@ -514,13 +514,12 @@ async function submitReport(replyToken, userId) {
         image_ids: session.images || [],                               
         image_count: session.images ? session.images.length : 0,      
         contact_info: session.contactInfo || 'ไม่ระบุ',               
-        timestamp: session.timestamp || new Date().toLocaleString('th-TH'),
+        timestamp: session.timestamp || getThaiDateTime(),
         status: 'pending',
         ticket_id: generateTicketId()
     };
 
     try {
-
         // แจ้งเตือน Telegram
         await notifyTelegram(reportData);
 
@@ -555,6 +554,77 @@ async function submitReport(replyToken, userId) {
     }
 }
 
+// Telegram Notification Function
+async function notifyTelegram(reportData) {
+    const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '7501921791:AAHq28KxeNcGRAks4DGMoh6CmQw32chwOaQ';
+    const telegramChatId = process.env.TELEGRAM_CHAT_ID || '-4699760769';
+
+    try {
+        const message = `
+📋 *แจ้งปัญหาใหม่*
+🎫 หมายเลขติดตาม: ${reportData.ticket_id}
+🔸 ประเภท: ${reportData.problem_type_name}
+🔸 รายละเอียด: ${reportData.problem_details}
+🔸 รูปภาพ: ${reportData.image_count > 0 ? `มี ${reportData.image_count} รูป` : 'ไม่มีรูปภาพ'}
+🔸 ข้อมูลติดต่อ: ${reportData.contact_info}
+🔸 เวลา: ${reportData.timestamp}
+        `;
+
+        // ส่งข้อความไปยัง Telegram
+        await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+            chat_id: telegramChatId,
+            text: message,
+            parse_mode: 'Markdown'
+        });
+
+        // ส่งรูปภาพ (ถ้ามี)
+        if (reportData.image_ids && reportData.image_ids.length > 0) {
+            for (let i = 0; i < reportData.image_ids.length; i++) {
+                const imageId = reportData.image_ids[i];
+                try {
+                    // ดาวน์โหลดรูปภาพจาก LINE
+                    const imageResponse = await axios.get(`https://api-data.line.me/v2/bot/message/${imageId}/content`, {
+                        headers: {
+                            'Authorization': `Bearer ${config.channelAccessToken}`
+                        },
+                        responseType: 'stream'
+                    });
+
+                    // ส่งรูปภาพไปยัง Telegram
+                    const formData = new FormData();
+                    formData.append('chat_id', telegramChatId);
+                    formData.append('photo', imageResponse.data, {
+                        filename: `image_${i + 1}.jpg`,
+                        contentType: 'image/jpeg'
+                    });
+                    formData.append('caption', `รูปภาพที่ ${i + 1} - ${reportData.ticket_id}`);
+
+                    await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, formData, {
+                        headers: {
+                            ...formData.getHeaders()
+                        }
+                    });
+
+                } catch (imageError) {
+                    console.error(`Error sending image ${i + 1}:`, imageError.message);
+                    
+                    // ส่งข้อความแจ้งว่าไม่สามารถส่งรูปได้
+                    await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+                        chat_id: telegramChatId,
+                        text: `❌ ไม่สามารถส่งรูปภาพที่ ${i + 1} ได้\nTicket: ${reportData.ticket_id}`
+                    });
+                }
+            }
+        }
+
+        console.log('Successfully sent notification to Telegram');
+
+    } catch (error) {
+        console.error('Error sending notification to Telegram:', error.message);
+        throw new Error(`Telegram notification failed: ${error.message}`);
+    }
+}
+
 // Helper functions
 function getProblemTypeName(type) {
   const types = {
@@ -586,43 +656,3 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
-
-//----------------------------------------------------------------------------------------------------------
-async function notifyTelegram(reportData) {
-    const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '7501921791:AAHq28KxeNcGRAks4DGMoh6CmQw32chwOaQ';
-    const telegramChatId = process.env.TELEGRAM_CHAT_ID || '-4699760769'; // Chat ID ของกลุ่ม Telegram
-
-    const message = `
-📋 **แจ้งปัญหาใหม่**
-🎫 หมายเลขติดตาม: ${reportData.ticket_id}
-🔸 ประเภท: ${reportData.problem_type_name}
-🔸 รายละเอียด: ${reportData.problem_details}
-🔸 รูปภาพ: ${reportData.image_count > 0 ? 'มีรูปภาพ' : 'ไม่มีรูปภาพ'}
-🔸 ข้อมูลติดต่อ: ${reportData.contact_info}
-🔸 เวลา: ${reportData.timestamp}
-    `;
-
-    // ส่งข้อความไปยัง Telegram
-    await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
-        chat_id: telegramChatId,
-        text: message,
-        parse_mode: 'Markdown'
-    });
-
-    // ส่งรูปภาพ (ถ้ามี)
-    for (const imageId of reportData.image_ids) {
-        const imageUrl = `https://api-data.line.me/v2/bot/message/${imageId}/content`;
-        const imageBuffer = await axios.get(imageUrl, {
-            headers: {
-                Authorization: `Bearer ${config.channelAccessToken}`
-            },
-            responseType: 'arraybuffer'
-        });
-
-        await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, {
-            chat_id: telegramChatId,
-            photo: `data:image/jpeg;base64,${Buffer.from(imageBuffer.data).toString('base64')}`
-        });
-    }
-}
