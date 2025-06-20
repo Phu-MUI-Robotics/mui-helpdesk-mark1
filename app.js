@@ -37,7 +37,6 @@ function handleEvent(event) {
     if (event.type === 'message' && event.message.type === 'text') {
         const text = event.message.text;
 
-        // รองรับข้อความจาก Rich Menu และข้อความพิมพ์เอง
         if (text === 'แจ้งปัญหาการใช้งานอุปกรณ์') {
             return showProblemTypes(event.replyToken, userId); //Step 1: เลือกประเภทปัญหา
         }
