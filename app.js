@@ -1,6 +1,7 @@
 const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
+const FormData = require('form-data');  // เพิ่มบรรทัดนี้
 
 const app = express();
 
@@ -32,10 +33,11 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 function handleEvent(event) {
     const userId = event.source.userId;
 
-    //รับข้อความจาก Rich Menu
+    //รับข้อความจาก Rich Menu และข้อความทั่วไป
     if (event.type === 'message' && event.message.type === 'text') {
         const text = event.message.text;
 
+        // รองรับข้อความจาก Rich Menu และข้อความพิมพ์เอง
         if (text === 'แจ้งปัญหาการใช้งานอุปกรณ์') {
             return showProblemTypes(event.replyToken, userId); //Step 1: เลือกประเภทปัญหา
         }
@@ -554,21 +556,19 @@ async function submitReport(replyToken, userId) {
     }
 }
 
-// Telegram Notification Function
+// Telegram Notification Function (แก้ไขใหม่)
 async function notifyTelegram(reportData) {
     const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '7501921791:AAHq28KxeNcGRAks4DGMoh6CmQw32chwOaQ';
     const telegramChatId = process.env.TELEGRAM_CHAT_ID || '-4699760769';
 
     try {
-        const message = `
-📋 *แจ้งปัญหาใหม่*
+        const message = `📋 *แจ้งปัญหาใหม่*
 🎫 หมายเลขติดตาม: ${reportData.ticket_id}
 🔸 ประเภท: ${reportData.problem_type_name}
 🔸 รายละเอียด: ${reportData.problem_details}
 🔸 รูปภาพ: ${reportData.image_count > 0 ? `มี ${reportData.image_count} รูป` : 'ไม่มีรูปภาพ'}
 🔸 ข้อมูลติดต่อ: ${reportData.contact_info}
-🔸 เวลา: ${reportData.timestamp}
-        `;
+🔸 เวลา: ${reportData.timestamp}`;
 
         // ส่งข้อความไปยัง Telegram
         await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
@@ -590,7 +590,7 @@ async function notifyTelegram(reportData) {
                         responseType: 'stream'
                     });
 
-                    // ส่งรูปภาพไปยัง Telegram
+                    // ส่งรูปภาพไปยัง Telegram ด้วย FormData
                     const formData = new FormData();
                     formData.append('chat_id', telegramChatId);
                     formData.append('photo', imageResponse.data, {
@@ -600,10 +600,10 @@ async function notifyTelegram(reportData) {
                     formData.append('caption', `รูปภาพที่ ${i + 1} - ${reportData.ticket_id}`);
 
                     await axios.post(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, formData, {
-                        headers: {
-                            ...formData.getHeaders()
-                        }
+                        headers: formData.getHeaders()
                     });
+
+                    console.log(`Successfully sent image ${i + 1} to Telegram`);
 
                 } catch (imageError) {
                     console.error(`Error sending image ${i + 1}:`, imageError.message);
